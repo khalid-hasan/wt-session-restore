@@ -8,6 +8,9 @@ It captures state automatically as you work (zero maintenance) and restores it w
 double-click. It's designed around **forced/auto shutdowns** — the common case where you don't
 close anything and let the OS shut everything down.
 
+> 📖 New here? Read the **[plain-English guide](docs/GUIDE.md)** — how it works, how to use it,
+> and how to test it in two minutes.
+
 ## How it works
 
 1. A **tracker** is loaded by your PowerShell profile. On every Enter keypress it records the
