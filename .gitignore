@@ -1,0 +1,13 @@
+# Pester output
+testResults*.xml
+coverage*.xml
+
+# Local runtime state (created by the installer under %USERPROFILE%, never in-repo)
+.wt-session-restore/
+
+# Editor / OS cruft
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
