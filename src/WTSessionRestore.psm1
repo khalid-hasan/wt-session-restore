@@ -47,20 +47,18 @@ function Resolve-RestoreAction {
     return $replay
 }
 
-function Select-RestorableSessions {
+function Select-OpenSessions {
+    # Project the currently-alive sessions down to the fields a tab needs to be
+    # reopened. This is the set an autosave snapshots as "what is open right now".
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Sessions,
-        [Parameter(Mandatory)][datetime]$BootTime,
+        [AllowNull()][object[]]$Sessions = @(),
         [Parameter(Mandatory)][scriptblock]$IsPidAlive
     )
 
-    # updatedAt is epoch milliseconds (UTC). Integer comparison avoids the
-    # timezone/Kind ambiguity that ConvertFrom-Json introduces with date strings.
-    $bootMs = [System.DateTimeOffset]::new($BootTime.ToUniversalTime()).ToUnixTimeMilliseconds()
     $result = foreach ($s in $Sessions) {
-        if ([bool](& $IsPidAlive $s.pid)) { continue }
-        if ([int64]$s.updatedAt -lt $bootMs) { $s }
+        if (-not [bool](& $IsPidAlive $s.pid)) { continue }
+        [pscustomobject]@{ cwd = $s.cwd; command = $s.command; shell = $s.shell }
     }
     @($result)
 }
@@ -76,7 +74,7 @@ function Get-BootTimeUtcMs {
 function ConvertTo-WtArgumentList {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Sessions,
+        [AllowNull()][object[]]$Sessions = @(),
         [string[]]$DenyList = @()
     )
 
@@ -131,4 +129,4 @@ function Write-SessionStateAtomic {
     Move-Item -LiteralPath $tmp -Destination $Path -Force
 }
 
-Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-RestorableSessions, ConvertTo-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic, Get-BootTimeUtcMs
+Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-OpenSessions, ConvertTo-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic, Get-BootTimeUtcMs

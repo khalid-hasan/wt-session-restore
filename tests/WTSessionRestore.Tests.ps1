@@ -44,42 +44,40 @@ Describe 'Resolve-RestoreAction' {
     }
 }
 
-Describe 'Select-RestorableSessions' {
+Describe 'Select-OpenSessions' {
     BeforeAll {
-        # updatedAt is epoch milliseconds (UTC).
-        $boot   = [System.DateTimeOffset]::Parse('2026-05-31T12:00:00Z').UtcDateTime
-        $preMs  = [System.DateTimeOffset]::Parse('2026-05-31T10:00:00Z').ToUnixTimeMilliseconds()
-        $postMs = [System.DateTimeOffset]::Parse('2026-05-31T13:00:00Z').ToUnixTimeMilliseconds()
-        $alive  = { param($processId) $processId -eq 999 }
+        $alive = { param($processId) $processId -eq 999 }
         $sessions = @(
-            [pscustomobject]@{ pid = 100; updatedAt = $preMs }   # dead, pre-boot  -> keep
-            [pscustomobject]@{ pid = 101; updatedAt = $postMs }  # dead, post-boot -> drop
-            [pscustomobject]@{ pid = 999; updatedAt = $preMs }   # alive           -> drop
+            [pscustomobject]@{ pid = 100; cwd = 'C:\a'; command = 'claude'; shell = 'pwsh.exe' }   # dead  -> drop
+            [pscustomobject]@{ pid = 999; cwd = 'C:\b'; command = 'codex';  shell = 'pwsh.exe' }    # alive -> keep
         )
     }
-    It 'keeps only dead, pre-boot sessions' {
-        $r = Select-RestorableSessions -Sessions $sessions -BootTime $boot -IsPidAlive $alive
+    It 'keeps only alive sessions, projected to cwd/command/shell' {
+        $r = Select-OpenSessions -Sessions $sessions -IsPidAlive $alive
         $r.Count | Should -Be 1
-        $r[0].pid | Should -Be 100
+        $r[0].cwd | Should -Be 'C:\b'
+        $r[0].command | Should -Be 'codex'
+        $r[0].shell | Should -Be 'pwsh.exe'
+        ($r[0].PSObject.Properties.Name -contains 'pid') | Should -BeFalse
     }
     It 'returns empty for empty input' {
-        (Select-RestorableSessions -Sessions @() -BootTime $boot -IsPidAlive $alive).Count | Should -Be 0
+        (Select-OpenSessions -Sessions @() -IsPidAlive $alive).Count | Should -Be 0
     }
 }
 
-Describe 'Selection survives a JSON round-trip (regression: ConvertFrom-Json date mangling)' {
-    It 'still selects a dead, pre-boot session after write + read' {
+Describe 'Snapshot survives a JSON round-trip (layout -> wt args)' {
+    It 'reopens a saved single-tab layout correctly after write + read' {
         $dir = Join-Path $TestDrive 'rt'
         New-Item -ItemType Directory -Path $dir | Out-Null
-        $boot   = [System.DateTimeOffset]::Parse('2026-05-31T12:00:00Z').UtcDateTime
-        $preMs  = [System.DateTimeOffset]::Parse('2026-05-31T10:00:00Z').ToUnixTimeMilliseconds()
-        Write-SessionStateAtomic -Path (Join-Path $dir 's.json') -State ([pscustomobject]@{
-            id = 's'; pid = 999999; shell = 'pwsh.exe'; cwd = 'C:\x'; command = 'claude'; updatedAt = $preMs
-        })
-        $loaded = Read-AllSessions $dir
-        $r = Select-RestorableSessions -Sessions $loaded -BootTime $boot -IsPidAlive { param($processId) $false }
-        $r.Count | Should -Be 1
-        $r[0].command | Should -Be 'claude'
+        $layoutPath = Join-Path $dir 'layout.json'
+        $layout = [pscustomobject]@{
+            bootMs = 123; savedAtMs = 456
+            tabs   = @([pscustomobject]@{ cwd = 'C:\proj'; command = 'claude'; shell = 'pwsh.exe' })
+        }
+        Write-SessionStateAtomic -Path $layoutPath -State $layout
+        $loaded = Get-Content $layoutPath -Raw | ConvertFrom-Json
+        $wtArgs = ConvertTo-WtArgumentList -Sessions @($loaded.tabs) -DenyList @()
+        ($wtArgs -join '|') | Should -Be 'new-tab|--title|proj|-d|C:\proj|pwsh.exe|-NoExit|-Command|claude'
     }
 }
 

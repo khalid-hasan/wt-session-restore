@@ -8,7 +8,7 @@ $sessionsDir = Join-Path $stateDir 'sessions'
 
 New-Item -ItemType Directory -Path $sessionsDir -Force | Out-Null
 
-foreach ($f in 'WTSessionRestore.psm1', 'tracker.ps1', 'Restore-Workspace.ps1') {
+foreach ($f in 'WTSessionRestore.psm1', 'tracker.ps1', 'Restore-Workspace.ps1', 'Save-Workspace.ps1') {
     Copy-Item -LiteralPath (Join-Path $srcDir $f) -Destination $stateDir -Force
 }
 
@@ -73,6 +73,29 @@ $sc.Description       = 'Restore PowerShell workspace tabs'
 $sc.Save()
 Write-Host "Created shortcut: $lnkPath"
 
+# Autosave scheduled task: snapshot open tabs every 2 minutes while logged on.
+# Registered with schtasks.exe (per-user, no admin). Launched via a tiny VBScript so
+# pwsh runs fully hidden — no console window flashing every couple of minutes.
+$saveScript = Join-Path $stateDir 'Save-Workspace.ps1'
+$vbs        = Join-Path $stateDir 'run-hidden.vbs'
+$taskName   = 'wt-session-restore autosave'
+
+@"
+Set sh = CreateObject("WScript.Shell")
+cmd = """" & "$pwshPath" & """" & " -NoProfile -ExecutionPolicy Bypass -File " & """" & "$saveScript" & """"
+sh.Run cmd, 0, False
+"@ | Set-Content -LiteralPath $vbs -Encoding ASCII
+
+$tr = 'wscript.exe "{0}"' -f $vbs
+schtasks /Create /TN $taskName /TR $tr /SC MINUTE /MO 2 /F | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Registered autosave task: '$taskName' (every 2 min, hidden)"
+    schtasks /Run /TN $taskName | Out-Null   # take an immediate baseline snapshot
+} else {
+    Write-Warning "Could not register the autosave task (schtasks exit $LASTEXITCODE). Run the installer from a normal (non-sandboxed) PowerShell."
+}
+
 Write-Host ''
 Write-Host 'Install complete. Open NEW terminal tabs to begin tracking.'
-Write-Host 'After a reboot, double-click "Restore Workspace" on your Desktop BEFORE opening terminals manually.'
+Write-Host 'Your open tabs are snapshotted every 2 minutes. After a reboot, double-click'
+Write-Host '"Restore Workspace" on your Desktop to bring them back.'

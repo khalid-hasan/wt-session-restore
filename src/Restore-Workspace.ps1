@@ -1,13 +1,43 @@
+# Restore-Workspace.ps1 — run by the Desktop shortcut. Reopens the tabs from the most
+# recent autosaved snapshot taken before the current boot.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
 
 $stateDir    = Join-Path $env:USERPROFILE '.wt-session-restore'
-$sessionsDir = Join-Path $stateDir 'sessions'
-$archiveDir  = Join-Path $stateDir 'archive'
+$layoutFile  = Join-Path $stateDir 'layout.json'
+$restoreFile = Join-Path $stateDir 'restore.json'
 $denyFile    = Join-Path $stateDir 'denylist.txt'
 
 Import-Module (Join-Path $stateDir 'WTSessionRestore.psm1') -Force
+
+function Read-Layout([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    try { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json } catch { return $null }
+}
+
+$currentBootMs = Get-BootTimeUtcMs
+$layout  = Read-Layout $layoutFile
+$restore = Read-Layout $restoreFile
+
+# Pick the snapshot that represents the workspace from before this boot:
+#  1. layout.json still holds the previous session (autosave hasn't transitioned yet)
+#  2. restore.json (the promoted pre-reboot snapshot)
+#  3. layout.json from this same boot (no reboot — e.g. testing / same-session recovery)
+if ($layout -and [int64]$layout.bootMs -ne $currentBootMs) {
+    $chosen = $layout
+} elseif ($restore) {
+    $chosen = $restore
+} else {
+    $chosen = $layout
+}
+
+$tabs = if ($chosen) { @($chosen.tabs) } else { @() }
+if ($tabs.Count -eq 0) {
+    Write-Host 'wt-session-restore: nothing to restore (no saved workspace yet).'
+    Start-Sleep -Seconds 2
+    return
+}
 
 $denyList = @()
 if (Test-Path -LiteralPath $denyFile) {
@@ -16,28 +46,9 @@ if (Test-Path -LiteralPath $denyFile) {
         Where-Object { $_ -and -not $_.StartsWith('#') }
 }
 
-$bootTime   = [System.DateTimeOffset]::FromUnixTimeMilliseconds((Get-BootTimeUtcMs)).UtcDateTime
-$sessions   = Read-AllSessions $sessionsDir
-$restorable = Select-RestorableSessions -Sessions $sessions -BootTime $bootTime -IsPidAlive {
-    param($processId) $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
-}
-
-if (-not $restorable -or $restorable.Count -eq 0) {
-    Write-Host 'wt-session-restore: nothing to restore.'
-    Start-Sleep -Seconds 2
-    return
-}
-
 $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 if (-not $wt) { throw "wt-session-restore: wt.exe (Windows Terminal) was not found on PATH." }
 
-$wtArgs = ConvertTo-WtArgumentList -Sessions $restorable -DenyList $denyList
+$wtArgs = ConvertTo-WtArgumentList -Sessions $tabs -DenyList $denyList
 Start-Process -FilePath $wt -ArgumentList $wtArgs
-
-if (-not (Test-Path -LiteralPath $archiveDir)) { New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null }
-foreach ($s in $restorable) {
-    if ($s.SourceFile -and (Test-Path -LiteralPath $s.SourceFile)) {
-        Move-Item -LiteralPath $s.SourceFile -Destination $archiveDir -Force
-    }
-}
-Write-Host ("wt-session-restore: opened {0} tab(s)." -f $restorable.Count)
+Write-Host ("wt-session-restore: opened {0} tab(s)." -f $tabs.Count)

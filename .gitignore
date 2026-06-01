@@ -5,6 +5,9 @@ coverage*.xml
 # Local runtime state (created by the installer under %USERPROFILE%, never in-repo)
 .wt-session-restore/
 
+# Session working notes (not part of the published tool)
+.claude/
+
 # Editor / OS cruft
 .vs/
 .vscode/

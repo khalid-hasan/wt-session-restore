@@ -1,7 +1,30 @@
 # PowerShell Tab Restore — Design
 
 **Date:** 2026-05-31
-**Status:** Approved for planning
+**Status:** Partially superseded 2026-06-01 (see banner below)
+
+> ## ⚠️ Superseded: capture/restore mechanism (2026-06-01)
+>
+> The original mechanism below — clean-exit deletion plus the assumption that session files
+> *survive a forced shutdown* and a boot-time filter picks "what was open at shutdown" — proved
+> unreliable in practice: the `PowerShell.Exiting` cleanup fires unpredictably, and the design
+> was untestable without a reboot. It was replaced by an **autosave-snapshot** model:
+>
+> - The tracker still captures each tab's `{cwd, command, shell}` at Enter-time into
+>   `sessions\<id>.json`.
+> - A per-user **scheduled task** (`Save-Workspace.ps1`, every ~2 min, run hidden via a VBScript
+>   wrapper) snapshots the *currently-open* sessions into `layout.json`
+>   (`{ bootMs, savedAtMs, tabs[] }`).
+> - On the first snapshot after a reboot (`layout.bootMs != currentBootMs`), the previous
+>   session's `layout.json` is promoted to `restore.json` **before** being overwritten — so the
+>   restore point can't be clobbered by the new session's autosaves.
+> - `Restore-Workspace.ps1` reopens the most recent pre-boot snapshot (preferring `restore.json`,
+>   falling back to a not-yet-transitioned `layout.json`, then to the same-boot `layout.json` for
+>   same-session recovery).
+>
+> Benefits: independent of how Windows kills shells; purposely-closed tabs drop out of the next
+> snapshot; testable without rebooting. The **Problem**, **Goals**, command-replay/deny-list
+> rules, and `wt` argument construction below are all still current.
 
 ## Problem
 

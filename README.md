@@ -15,15 +15,20 @@ close anything and let the OS shut everything down.
 
 1. A **tracker** is loaded by your PowerShell profile. On every Enter keypress it records the
    tab's folder + the command you just launched into a small per-session JSON file (written
-   atomically, so a forced shutdown can't corrupt it).
-2. On a clean tab-close the tracker deletes its own file. A forced shutdown skips that, so the
-   leftover files are exactly the tabs that were open when the machine went down.
-3. After reboot you double-click **Restore Workspace**. It reads the leftover files and opens
-   one Windows Terminal window with one tab per session — each `cd`'d into its folder and
-   re-running its last command.
+   atomically). Recording happens at **Enter-time** (before the command runs), so a long-running
+   process like `claude` is captured the instant you launch it — not after it exits.
+2. A **background task** snapshots your currently-open tabs every ~2 minutes into `layout.json`.
+   It runs hidden (via a small VBScript wrapper) so nothing flashes on screen.
+3. The first snapshot after a **reboot** notices the boot changed and copies the previous
+   session's snapshot to `restore.json` — *before* the new session starts overwriting
+   `layout.json`. That's what makes the restore point survive intact.
+4. You double-click **Restore Workspace**. It reads the last pre-reboot snapshot and opens one
+   Windows Terminal window with one tab per entry — each `cd`'d into its folder and re-running
+   its last command.
 
-Recording happens at **Enter-time** (before the command runs), so a long-running process like
-`claude` is captured the instant you launch it — not after it exits.
+Because restore reads an autosaved snapshot (not whatever files happen to survive a shutdown),
+it doesn't depend on how Windows terminates your shells, and tabs you closed on purpose drop out
+of the next snapshot so they don't come back.
 
 ## Requirements
 
@@ -42,6 +47,7 @@ pwsh -ExecutionPolicy Bypass -File .\src\Install-WTSessionRestore.ps1
 The installer:
 - copies the runtime files to `%USERPROFILE%\.wt-session-restore\`,
 - wires the tracker into both PowerShell profiles (idempotent),
+- registers a per-user **autosave** scheduled task (every 2 min, hidden — no admin needed),
 - creates a **Restore Workspace** shortcut on your Desktop.
 
 Open new terminal tabs to begin tracking. If new shells don't track, ensure your execution
@@ -49,8 +55,8 @@ policy allows profile scripts: `Set-ExecutionPolicy -Scope CurrentUser RemoteSig
 
 ## Usage
 
-Just work normally. After a reboot, double-click **Restore Workspace** *before* opening
-terminals manually.
+Just work normally — your open tabs are snapshotted every couple of minutes. After a reboot,
+double-click **Restore Workspace** to bring them back.
 
 ### Commands that are / aren't replayed
 
@@ -72,6 +78,7 @@ trivial; other `git` commands replay.
 
 - Remove the `# >>> wt-session-restore >>>` … `# <<< wt-session-restore <<<` block from your
   PowerShell profile(s) (`$PROFILE`).
+- Delete the scheduled task: `schtasks /Delete /TN "wt-session-restore autosave" /F`.
 - Delete `%USERPROFILE%\.wt-session-restore\` and the Desktop shortcut.
 
 ## Development

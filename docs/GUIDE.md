@@ -16,7 +16,7 @@ have to reopen each tab, `cd` into the right folder, and re-run the command. Eve
 
 ## How it works (in plain English)
 
-Think of it as two small helpers:
+Think of it as three small helpers:
 
 ### 1. The "note-taker" (runs invisibly while you work)
 
@@ -27,9 +27,7 @@ that tab:
 - the **command** you just ran.
 
 It saves this as a small note (one file per tab) in a hidden folder:
-`C:\Users\<you>\.wt-session-restore\sessions\`.
-
-You never see this happen. It adds no steps to your day.
+`C:\Users\<you>\.wt-session-restore\sessions\`. You never see this happen.
 
 ```
 You type:  cd C:\dev\myproject   ↵
@@ -41,24 +39,30 @@ You type:  claude                ↵     ← note-taker records: folder = C:\dev
 > never get a chance to record it. By recording the moment you press Enter, it captures `claude`
 > the instant you launch it.
 
-When you **close a tab normally**, that tab's note is deleted (it's not open anymore, so there's
-nothing to restore). But when your PC is **force-restarted / auto shut down** (your usual habit),
-the notes are *not* deleted — they survive. So after a reboot, the leftover notes are exactly the
-tabs that were open when the machine went down.
+### 2. The "auto-saver" (a hidden task, every ~2 minutes)
 
-### 2. The "restorer" (the Desktop shortcut you double-click)
+A scheduled task wakes up every couple of minutes and takes a **snapshot** of the tabs that are
+*open right now* — saved as `layout.json`. It runs completely hidden (no window pops up).
 
-After you log back in, you double-click **Restore Workspace** on your Desktop. It:
+Because it only snapshots tabs that are currently open, a tab you **closed on purpose** simply
+drops out of the next snapshot — so it won't come back later. And because the snapshot is saved
+to disk continuously, it doesn't matter *how* your PC shuts down (clean, forced, or a power cut) —
+the last snapshot is already safe.
 
-1. reads all the leftover notes,
-2. opens **one** Windows Terminal window with **one tab per note**,
-3. puts each tab back in its folder and re-runs its command,
-4. tidies up the notes it just used.
+The first snapshot after a **reboot** is smart: it notices the computer restarted and sets aside
+the previous session's snapshot as your **restore point** (`restore.json`) before the new session
+starts overwriting things. That's what guarantees your pre-reboot tabs survive.
+
+### 3. The "restorer" (the Desktop shortcut you double-click)
+
+After you log back in, you double-click **Restore Workspace** on your Desktop. It reads your
+restore point and opens **one** Windows Terminal window with **one tab per entry** — each back in
+its folder and re-running its command.
 
 ```
-Leftover notes  ─►  Restore Workspace  ─►  ┌─ Tab: myproject  (running claude) ─┐
-                                            ├─ Tab: api        (running claude) ─┤
-                                            └─ Tab: docs       (folder only)    ─┘
+Restore point  ─►  Restore Workspace  ─►  ┌─ Tab: myproject  (running claude) ─┐
+                                           ├─ Tab: api        (running claude) ─┤
+                                           └─ Tab: docs       (folder only)    ─┘
 ```
 
 ### One smart rule: it skips "junk" commands
@@ -86,15 +90,17 @@ Desktop.
 ### Day to day
 
 1. **Just work normally.** Open tabs, `cd` into projects, run `claude` / `codex` / whatever.
-   The note-taker handles itself.
-2. **After a restart**, double-click **Restore Workspace** on your Desktop —
-   **before** you start opening terminals by hand.
+   The note-taker and auto-saver handle themselves.
+2. **After a restart**, double-click **Restore Workspace** on your Desktop.
 
 That's the whole workflow. There's no list to maintain and nothing to remember except the
 double-click.
 
-> ⚠️ **One catch:** only tabs opened *after* setup are tracked. Tabs you already had open before
-> installing won't be remembered until you reopen them once.
+> ⚠️ **Two things to know:**
+> - Only tabs opened *after* setup are tracked. Tabs you had open before installing won't be
+>   remembered until you reopen them once.
+> - The snapshot runs every ~2 minutes, so a tab you opened in the last minute or two before a
+>   reboot might not make it into the restore point. Long-lived project tabs are always captured.
 
 ---
 
@@ -118,24 +124,17 @@ You can prove each piece works in about two minutes.
 
 ### Test 2 — Does the restore work?
 
-This fakes "two tabs that were open at shutdown" and restores them, no reboot needed.
+This fakes a pre-reboot snapshot and restores it, no reboot needed. (The `bootMs = 1` marks the
+snapshot as "from before this boot," so Restore treats it as your restore point. Your real
+snapshot regenerates automatically within ~2 minutes, so this is safe to run.)
 
 ```powershell
-$state    = "$env:USERPROFILE\.wt-session-restore"
-$sessions = "$state\sessions"
-
-# Clear any real notes so we test cleanly (skip this if you have live tabs you care about):
-Get-ChildItem $sessions -Filter *.json -ErrorAction SilentlyContinue | Remove-Item -Force
-
-# A timestamp from just before the last boot, so they count as "open at shutdown":
-$preBoot = ([System.DateTimeOffset]((Get-CimInstance Win32_OperatingSystem).LastBootUpTime.AddMinutes(-5))).ToUnixTimeMilliseconds()
-
-[pscustomobject]@{ id='demo1'; pid=999999; shell='pwsh.exe'; cwd='C:\Windows'; command='Get-ChildItem'; updatedAt=$preBoot } |
-    ConvertTo-Json | Set-Content "$sessions\demo1.json"
-[pscustomobject]@{ id='demo2'; pid=999998; shell='pwsh.exe'; cwd='C:\Windows\System32'; command='ls'; updatedAt=$preBoot } |
-    ConvertTo-Json | Set-Content "$sessions\demo2.json"
-
-# Run the restorer:
+$state = "$env:USERPROFILE\.wt-session-restore"
+$layout = [pscustomobject]@{ bootMs = 1; savedAtMs = 1; tabs = @(
+    [pscustomobject]@{ cwd = 'C:\Windows';          command = 'Get-ChildItem'; shell = 'pwsh.exe' }
+    [pscustomobject]@{ cwd = 'C:\Windows\System32'; command = 'ls';            shell = 'powershell.exe' }
+)}
+($layout | ConvertTo-Json -Depth 5) | Set-Content "$state\layout.json"
 & "$state\Restore-Workspace.ps1"
 ```
 
@@ -143,13 +142,23 @@ $preBoot = ([System.DateTimeOffset]((Get-CimInstance Win32_OperatingSystem).Last
 running `Get-ChildItem`, one in `System32` opened as a plain prompt (because `ls` is on the
 skip-list). The console prints `wt-session-restore: opened 2 tab(s).`
 
-### Test 3 — The real thing (when you're ready)
+### Test 3 — Is the auto-saver running?
 
-Open a few project tabs, run `claude` in them, **restart your PC normally**, log back in, and
-double-click **Restore Workspace**. Your tabs should come back in their folders with `claude`
-running again.
+```powershell
+schtasks /Query /TN "wt-session-restore autosave" /FO LIST | Select-String 'Status|Next Run'
+Get-Content "$env:USERPROFILE\.wt-session-restore\layout.json"   # your current open tabs
+```
 
-### Test 4 — Run the automated tests (for developers)
+✅ **Expected:** the task shows `Status: Ready`, and `layout.json` lists the tabs you currently
+have open.
+
+### Test 4 — The real thing (when you're ready)
+
+Open a few project tabs, run `claude` in them, wait a couple of minutes (so a snapshot is taken),
+**restart your PC**, log back in, and double-click **Restore Workspace**. Your tabs should come
+back in their folders with `claude` running again.
+
+### Test 5 — Run the automated tests (for developers)
 
 ```powershell
 cd wt-session-restore
@@ -157,7 +166,7 @@ Install-Module Pester -Scope CurrentUser -MinimumVersion 5.5.0 -Force -SkipPubli
 Invoke-Pester -Path .\tests\WTSessionRestore.Tests.ps1 -Output Detailed
 ```
 
-✅ **Expected:** 18 tests pass.
+✅ **Expected:** 19 tests pass.
 
 ---
 
@@ -175,5 +184,6 @@ Invoke-Pester -Path .\tests\WTSessionRestore.Tests.ps1 -Output Detailed
 1. Open your PowerShell profile (`notepad $PROFILE`) and delete the block between
    `# >>> wt-session-restore >>>` and `# <<< wt-session-restore <<<`. Do the same for Windows
    PowerShell 5.1 if you use it.
-2. Delete the folder `C:\Users\<you>\.wt-session-restore\` and the **Restore Workspace** Desktop
+2. Delete the auto-save task: `schtasks /Delete /TN "wt-session-restore autosave" /F`.
+3. Delete the folder `C:\Users\<you>\.wt-session-restore\` and the **Restore Workspace** Desktop
    shortcut.
