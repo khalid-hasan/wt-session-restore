@@ -1,9 +1,9 @@
-# Save-Workspace.ps1 — run by a scheduled task at logon + every couple of minutes.
-# Snapshots the currently-open PowerShell tabs into layout.json. Across a reboot it
-# promotes the previous session's layout into restore.json exactly once, so a fresh
-# session's autosaves can never clobber the workspace you want to restore.
+# Save-Workspace.ps1
+#   (no args)        run by the scheduled task every ~2 min: rolling autosave for reboot recovery.
+#   -AsRestorePoint  run by the "Save Workspace" Desktop button: checkpoint the current tabs NOW
+#                    as the set that Restore will reopen.
 [CmdletBinding()]
-param()
+param([switch]$AsRestorePoint)
 $ErrorActionPreference = 'Stop'
 
 $stateDir    = Join-Path $env:USERPROFILE '.wt-session-restore'
@@ -14,10 +14,27 @@ $restoreFile = Join-Path $stateDir 'restore.json'
 Import-Module (Join-Path $stateDir 'WTSessionRestore.psm1') -Force
 
 $bootMs = Get-BootTimeUtcMs
+$open = Select-OpenSessions -Sessions (Read-AllSessions $sessionsDir) -IsPidAlive {
+    param($processId) $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
+}
+$snapshot = [pscustomobject]@{
+    bootMs    = $bootMs
+    savedAtMs = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    tabs      = @($open)
+}
 
-# Boot transition: if the existing layout is from a previous boot, it represents the
-# workspace as it was just before shutdown — preserve it as the restore point before
-# this session starts overwriting layout.json.
+if ($AsRestorePoint) {
+    # Manual checkpoint: this IS the set Restore will reopen. Write it as the restore point
+    # and keep layout.json in sync so the next autosave doesn't immediately diverge.
+    Write-SessionStateAtomic -Path $restoreFile -State $snapshot
+    Write-SessionStateAtomic -Path $layoutFile  -State $snapshot
+    Write-Host ("wt-session-restore: saved workspace ({0} tab(s))." -f @($open).Count)
+    Start-Sleep -Seconds 2   # leave the confirmation on screen briefly
+    return
+}
+
+# Autosave: if the existing layout is from a previous boot, it's the pre-shutdown workspace —
+# promote it to the restore point before this session overwrites layout.json.
 if (Test-Path -LiteralPath $layoutFile) {
     try {
         $existing = Get-Content -LiteralPath $layoutFile -Raw | ConvertFrom-Json
@@ -26,15 +43,4 @@ if (Test-Path -LiteralPath $layoutFile) {
         }
     } catch { }
 }
-
-# Snapshot the tabs that are open right now.
-$open = Select-OpenSessions -Sessions (Read-AllSessions $sessionsDir) -IsPidAlive {
-    param($processId) $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
-}
-
-$layout = [pscustomobject]@{
-    bootMs    = $bootMs
-    savedAtMs = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    tabs      = @($open)
-}
-Write-SessionStateAtomic -Path $layoutFile -State $layout
+Write-SessionStateAtomic -Path $layoutFile -State $snapshot

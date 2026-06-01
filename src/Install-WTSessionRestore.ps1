@@ -73,10 +73,21 @@ $sc.Description       = 'Restore PowerShell workspace tabs'
 $sc.Save()
 Write-Host "Created shortcut: $lnkPath"
 
+# "Save Workspace" shortcut — manual checkpoint of the current tabs (visible, shows a confirmation).
+$saveLnk    = Join-Path $desktop 'Save Workspace.lnk'
+$saveScript = Join-Path $stateDir 'Save-Workspace.ps1'
+$scSave = $wsh.CreateShortcut($saveLnk)
+$scSave.TargetPath       = $pwshPath
+$scSave.Arguments        = "-NoProfile -ExecutionPolicy Bypass -File `"$saveScript`" -AsRestorePoint"
+$scSave.WorkingDirectory = $stateDir
+$scSave.IconLocation     = "$pwshPath,0"
+$scSave.Description       = 'Save the current PowerShell tabs as the restore point'
+$scSave.Save()
+Write-Host "Created shortcut: $saveLnk"
+
 # Autosave scheduled task: snapshot open tabs every 2 minutes while logged on.
 # Registered with schtasks.exe (per-user, no admin). Launched via a tiny VBScript so
 # pwsh runs fully hidden — no console window flashing every couple of minutes.
-$saveScript = Join-Path $stateDir 'Save-Workspace.ps1'
 $vbs        = Join-Path $stateDir 'run-hidden.vbs'
 $taskName   = 'wt-session-restore autosave'
 
@@ -96,6 +107,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host ''
-Write-Host 'Install complete. Open NEW terminal tabs to begin tracking.'
-Write-Host 'Your open tabs are snapshotted every 2 minutes. After a reboot, double-click'
-Write-Host '"Restore Workspace" on your Desktop to bring them back.'
+Write-Host 'Install complete. Open NEW terminal tabs to begin tracking. Two Desktop shortcuts:'
+Write-Host '  - "Save Workspace"    : checkpoint your current tabs now (so Restore brings back this set).'
+Write-Host '  - "Restore Workspace" : reopen the last saved set. After a reboot it uses the autosave.'
+Write-Host 'Your tabs are also auto-saved every 2 minutes, so a reboot is covered even without Save.'

@@ -89,12 +89,21 @@ Desktop.
 
 ### Day to day
 
-1. **Just work normally.** Open tabs, `cd` into projects, run `claude` / `codex` / whatever.
-   The note-taker and auto-saver handle themselves.
-2. **After a restart**, double-click **Restore Workspace** on your Desktop.
+You get **two Desktop shortcuts**:
 
-That's the whole workflow. There's no list to maintain and nothing to remember except the
-double-click.
+- **Save Workspace** — saves *all* your currently-open tabs as the restore point, right now.
+  Click it mid-session whenever you want Restore to bring back this exact set. (It saves every
+  open tab — you can't pick a subset.)
+- **Restore Workspace** — reopens the last saved set (whether you saved it, or the auto-saver did).
+
+So the workflow is:
+
+1. **Just work normally.** The note-taker and auto-saver handle themselves.
+2. Optionally click **Save Workspace** when you want a checkpoint.
+3. **After a restart**, double-click **Restore Workspace** — the auto-saver already captured your
+   tabs, so you don't even need to have clicked Save.
+
+There's no list to maintain.
 
 > ⚠️ **Two things to know:**
 > - Only tabs opened *after* setup are tracked. Tabs you had open before installing won't be

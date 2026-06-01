@@ -48,15 +48,22 @@ The installer:
 - copies the runtime files to `%USERPROFILE%\.wt-session-restore\`,
 - wires the tracker into both PowerShell profiles (idempotent),
 - registers a per-user **autosave** scheduled task (every 2 min, hidden — no admin needed),
-- creates a **Restore Workspace** shortcut on your Desktop.
+- creates **Save Workspace** and **Restore Workspace** shortcuts on your Desktop.
 
 Open new terminal tabs to begin tracking. If new shells don't track, ensure your execution
 policy allows profile scripts: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 ## Usage
 
-Just work normally — your open tabs are snapshotted every couple of minutes. After a reboot,
-double-click **Restore Workspace** to bring them back.
+Two Desktop shortcuts:
+
+- **Save Workspace** — checkpoint *all* your currently-open tabs right now, so **Restore Workspace**
+  brings back this exact set. Use it mid-session. It saves every open tab — there's no per-tab
+  selection.
+- **Restore Workspace** — reopen the last saved set (your manual save, or the automatic one).
+
+You don't have to remember to Save: your open tabs are also **auto-saved every ~2 minutes**, so
+after a reboot just double-click **Restore Workspace**.
 
 ### Commands that are / aren't replayed
 
