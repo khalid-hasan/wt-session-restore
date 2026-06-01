@@ -102,6 +102,12 @@ Describe 'Get-BootTimeUtcMs' {
         $boot | Should -BeGreaterThan 0
         $boot | Should -BeLessThan ([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
     }
+    It 'is stable across calls (no jitter — boot-transition detection depends on this)' {
+        $a = Get-BootTimeUtcMs
+        Start-Sleep -Milliseconds 60
+        $b = Get-BootTimeUtcMs
+        $a | Should -Be $b
+    }
 }
 
 Describe 'Read-AllSessions' {

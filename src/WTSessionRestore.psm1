@@ -64,11 +64,21 @@ function Select-OpenSessions {
 }
 
 function Get-BootTimeUtcMs {
-    # Epoch-ms of the last system boot, derived from uptime. ~0ms vs ~1.4s for
-    # Get-CimInstance Win32_OperatingSystem, which matters on every shell startup.
+    # Epoch-ms of the last system boot. MUST be stable across calls within a boot, or the
+    # autosave's boot-transition check fires constantly and clobbers restore.json. The OS
+    # boot timestamp is exact and fixed per boot; the uptime-derived value jitters by a few
+    # ms per call, so it's only a rounded fallback. Only Save-Workspace (background, every
+    # ~2 min) and Restore (on demand) call this, so the ~1.4s CIM cost doesn't matter — the
+    # interactive tracker never calls it.
     [CmdletBinding()]
     param()
-    return [int64]([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - [System.Environment]::TickCount64)
+    try {
+        $boot = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).LastBootUpTime
+        return [int64][System.DateTimeOffset]::new($boot.ToUniversalTime()).ToUnixTimeMilliseconds()
+    } catch {
+        $raw = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - [System.Environment]::TickCount64
+        return [int64]([math]::Round($raw / 10000.0) * 10000)   # round to 10s so calls agree
+    }
 }
 
 function ConvertTo-WtArgumentList {
