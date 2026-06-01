@@ -65,6 +65,36 @@ Describe 'Select-OpenSessions' {
     }
 }
 
+Describe 'Select-MissingTabs' {
+    BeforeAll {
+        $saved = @(
+            [pscustomobject]@{ cwd = 'C:\a'; command = 'claude'; shell = 'pwsh.exe' }
+            [pscustomobject]@{ cwd = 'C:\b'; command = 'claude'; shell = 'pwsh.exe' }
+            [pscustomobject]@{ cwd = 'C:\b'; command = 'claude'; shell = 'pwsh.exe' }   # two of C:\b
+        )
+    }
+    It 'reopens only the tabs not currently open (close 1 of several)' {
+        $open = @(
+            [pscustomobject]@{ cwd = 'C:\a'; command = 'claude' }
+            [pscustomobject]@{ cwd = 'C:\b'; command = 'claude' }   # one of the two C:\b still open
+        )
+        $r = Select-MissingTabs -Saved $saved -Open $open
+        $r.Count | Should -Be 1
+        $r[0].cwd | Should -Be 'C:\b'
+    }
+    It 'reopens nothing when everything is already open' {
+        (Select-MissingTabs -Saved $saved -Open $saved).Count | Should -Be 0
+    }
+    It 'reopens all saved tabs when nothing is open (reboot case)' {
+        (Select-MissingTabs -Saved $saved -Open @()).Count | Should -Be 3
+    }
+    It 'matches paths case-insensitively' {
+        $saved2 = @([pscustomobject]@{ cwd = 'C:\Dev'; command = 'claude' })
+        $open2  = @([pscustomobject]@{ cwd = 'c:\dev'; command = 'claude' })
+        (Select-MissingTabs -Saved $saved2 -Open $open2).Count | Should -Be 0
+    }
+}
+
 Describe 'Snapshot survives a JSON round-trip (layout -> wt args)' {
     It 'reopens a saved single-tab layout correctly after write + read' {
         $dir = Join-Path $TestDrive 'rt'

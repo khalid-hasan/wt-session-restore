@@ -109,6 +109,33 @@ function ConvertTo-WtArgumentList {
     return $wtArgs.ToArray()
 }
 
+function Select-MissingTabs {
+    # Multiset difference: of the saved tabs, return only those NOT already open, so Restore
+    # never duplicates a tab you still have open. Matches on (cwd, command), case-insensitive,
+    # by count — so two identical tabs with one still open reopens exactly one.
+    [CmdletBinding()]
+    param(
+        [AllowNull()][object[]]$Saved = @(),
+        [AllowNull()][object[]]$Open  = @()
+    )
+    $keyOf = { param($t) ("{0}`n{1}" -f $t.cwd, $t.command).ToLowerInvariant() }
+
+    $openCounts = @{}
+    foreach ($o in $Open) {
+        $k = & $keyOf $o
+        if ($openCounts.ContainsKey($k)) { $openCounts[$k]++ } else { $openCounts[$k] = 1 }
+    }
+    $missing = foreach ($s in $Saved) {
+        $k = & $keyOf $s
+        if ($openCounts.ContainsKey($k) -and $openCounts[$k] -gt 0) {
+            $openCounts[$k]--   # already open — consume one and skip
+        } else {
+            $s
+        }
+    }
+    @($missing)
+}
+
 function Read-AllSessions {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$SessionsDir)
@@ -139,4 +166,4 @@ function Write-SessionStateAtomic {
     Move-Item -LiteralPath $tmp -Destination $Path -Force
 }
 
-Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-OpenSessions, ConvertTo-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic, Get-BootTimeUtcMs
+Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-OpenSessions, Select-MissingTabs, ConvertTo-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic, Get-BootTimeUtcMs

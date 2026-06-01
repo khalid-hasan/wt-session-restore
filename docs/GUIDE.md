@@ -95,6 +95,8 @@ You get **two Desktop shortcuts**:
   Click it mid-session whenever you want Restore to bring back this exact set. (It saves every
   open tab — you can't pick a subset.)
 - **Restore Workspace** — reopens the last saved set (whether you saved it, or the auto-saver did).
+  It's smart about duplicates: it only opens tabs that **aren't already open**. So if you saved 6
+  tabs and accidentally close 1, hitting Restore reopens just that 1 — not all 6.
 
 So the workflow is:
 

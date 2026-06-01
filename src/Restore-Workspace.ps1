@@ -5,6 +5,7 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $stateDir    = Join-Path $env:USERPROFILE '.wt-session-restore'
+$sessionsDir = Join-Path $stateDir 'sessions'
 $layoutFile  = Join-Path $stateDir 'layout.json'
 $restoreFile = Join-Path $stateDir 'restore.json'
 $denyFile    = Join-Path $stateDir 'denylist.txt'
@@ -39,6 +40,18 @@ if ($tabs.Count -eq 0) {
     return
 }
 
+# Only reopen tabs that aren't already open, so closing some tabs and restoring fills the
+# gaps instead of duplicating the tabs you still have open.
+$open = Select-OpenSessions -Sessions (Read-AllSessions $sessionsDir) -IsPidAlive {
+    param($processId) $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
+}
+$toOpen = Select-MissingTabs -Saved $tabs -Open $open
+if ($toOpen.Count -eq 0) {
+    Write-Host 'wt-session-restore: nothing to restore — all saved tabs are already open.'
+    Start-Sleep -Seconds 2
+    return
+}
+
 $denyList = @()
 if (Test-Path -LiteralPath $denyFile) {
     $denyList = Get-Content -LiteralPath $denyFile |
@@ -49,6 +62,6 @@ if (Test-Path -LiteralPath $denyFile) {
 $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 if (-not $wt) { throw "wt-session-restore: wt.exe (Windows Terminal) was not found on PATH." }
 
-$wtArgs = ConvertTo-WtArgumentList -Sessions $tabs -DenyList $denyList
+$wtArgs = ConvertTo-WtArgumentList -Sessions $toOpen -DenyList $denyList
 Start-Process -FilePath $wt -ArgumentList $wtArgs
-Write-Host ("wt-session-restore: opened {0} tab(s)." -f $tabs.Count)
+Write-Host ("wt-session-restore: opened {0} of {1} saved tab(s) ({2} already open)." -f $toOpen.Count, $tabs.Count, ($tabs.Count - $toOpen.Count))

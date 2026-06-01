@@ -61,6 +61,8 @@ Two Desktop shortcuts:
   brings back this exact set. Use it mid-session. It saves every open tab — there's no per-tab
   selection.
 - **Restore Workspace** — reopen the last saved set (your manual save, or the automatic one).
+  It only opens tabs that **aren't already open**, so if you accidentally close a few and hit
+  Restore, it reopens just those — no duplicates of the tabs you still have.
 
 You don't have to remember to Save: your open tabs are also **auto-saved every ~2 minutes**, so
 after a reboot just double-click **Restore Workspace**.
