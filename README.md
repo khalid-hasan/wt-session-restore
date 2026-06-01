@@ -4,9 +4,10 @@ Restore your Windows Terminal **PowerShell tabs** — each in its working folder
 its last command — after a reboot. Built for people who keep 5–10 terminals open across
 different projects (e.g. `claude` / `codex` sessions) and lose them all on every restart.
 
-It captures state automatically as you work (zero maintenance) and restores it with one
-double-click. It's designed around **forced/auto shutdowns** — the common case where you don't
-close anything and let the OS shut everything down.
+It captures state automatically as you work (zero maintenance), lets you checkpoint your tabs
+anytime with a **Save Workspace** button, and restores them with one double-click. It's designed
+around **forced/auto shutdowns** — the common case where you don't close anything and let the OS
+shut everything down.
 
 > 📖 New here? Read the **[plain-English guide](docs/GUIDE.md)** — how it works, how to use it,
 > and how to test it in two minutes.
@@ -18,17 +19,18 @@ close anything and let the OS shut everything down.
    atomically). Recording happens at **Enter-time** (before the command runs), so a long-running
    process like `claude` is captured the instant you launch it — not after it exits.
 2. A **background task** snapshots your currently-open tabs every ~2 minutes into `layout.json`.
-   It runs hidden (via a small VBScript wrapper) so nothing flashes on screen.
+   It runs hidden (via a small VBScript wrapper) so nothing flashes on screen. Clicking
+   **Save Workspace** does the same snapshot on demand, as an explicit checkpoint.
 3. The first snapshot after a **reboot** notices the boot changed and copies the previous
    session's snapshot to `restore.json` — *before* the new session starts overwriting
    `layout.json`. That's what makes the restore point survive intact.
-4. You double-click **Restore Workspace**. It reads the last pre-reboot snapshot and opens one
-   Windows Terminal window with one tab per entry — each `cd`'d into its folder and re-running
-   its last command.
+4. You double-click **Restore Workspace**. It reads the last saved snapshot and opens one Windows
+   Terminal window — one tab per entry **that isn't already open** (so it never duplicates tabs
+   you still have), each `cd`'d into its folder and re-running its last command.
 
-Because restore reads an autosaved snapshot (not whatever files happen to survive a shutdown),
-it doesn't depend on how Windows terminates your shells, and tabs you closed on purpose drop out
-of the next snapshot so they don't come back.
+Because restore reads a saved snapshot (not whatever files happen to survive a shutdown), it
+doesn't depend on how Windows terminates your shells, and tabs you closed on purpose drop out of
+the next snapshot so they don't come back.
 
 ## Requirements
 
@@ -88,7 +90,8 @@ trivial; other `git` commands replay.
 - Remove the `# >>> wt-session-restore >>>` … `# <<< wt-session-restore <<<` block from your
   PowerShell profile(s) (`$PROFILE`).
 - Delete the scheduled task: `schtasks /Delete /TN "wt-session-restore autosave" /F`.
-- Delete `%USERPROFILE%\.wt-session-restore\` and the Desktop shortcut.
+- Delete `%USERPROFILE%\.wt-session-restore\` and the **Save Workspace** / **Restore Workspace**
+  Desktop shortcuts.
 
 ## Development
 
