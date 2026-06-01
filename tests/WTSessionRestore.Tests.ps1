@@ -83,7 +83,7 @@ Describe 'Selection survives a JSON round-trip (regression: ConvertFrom-Json dat
     }
 }
 
-Describe 'Build-WtArgumentList' {
+Describe 'ConvertTo-WtArgumentList' {
     BeforeAll {
         $sessions = @(
             [pscustomobject]@{ cwd = 'C:\dev\proj1'; command = 'claude'; shell = 'pwsh.exe' }
@@ -92,8 +92,17 @@ Describe 'Build-WtArgumentList' {
         $deny = @('ls')
     }
     It 'builds the expected wt argument array' {
-        $r = Build-WtArgumentList -Sessions $sessions -DenyList $deny
+        $r = ConvertTo-WtArgumentList -Sessions $sessions -DenyList $deny
         ($r -join '|') | Should -Be 'new-tab|--title|proj1|-d|C:\dev\proj1|pwsh.exe|-NoExit|-Command|claude|;|new-tab|--title|proj2|-d|C:\dev\proj2|powershell.exe|-NoExit'
+    }
+}
+
+Describe 'Get-BootTimeUtcMs' {
+    It 'returns a positive epoch-ms value in the past' {
+        $boot = Get-BootTimeUtcMs
+        $boot | Should -BeOfType [long]
+        $boot | Should -BeGreaterThan 0
+        $boot | Should -BeLessThan ([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
     }
 }
 

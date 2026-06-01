@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $denyFile) {
         Where-Object { $_ -and -not $_.StartsWith('#') }
 }
 
-$bootTime   = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+$bootTime   = [System.DateTimeOffset]::FromUnixTimeMilliseconds((Get-BootTimeUtcMs)).UtcDateTime
 $sessions   = Read-AllSessions $sessionsDir
 $restorable = Select-RestorableSessions -Sessions $sessions -BootTime $bootTime -IsPidAlive {
     param($processId) $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
@@ -31,7 +31,7 @@ if (-not $restorable -or $restorable.Count -eq 0) {
 $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 if (-not $wt) { throw "wt-session-restore: wt.exe (Windows Terminal) was not found on PATH." }
 
-$wtArgs = Build-WtArgumentList -Sessions $restorable -DenyList $denyList
+$wtArgs = ConvertTo-WtArgumentList -Sessions $restorable -DenyList $denyList
 Start-Process -FilePath $wt -ArgumentList $wtArgs
 
 if (-not (Test-Path -LiteralPath $archiveDir)) { New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null }

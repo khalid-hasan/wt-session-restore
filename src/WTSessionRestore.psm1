@@ -65,7 +65,15 @@ function Select-RestorableSessions {
     @($result)
 }
 
-function Build-WtArgumentList {
+function Get-BootTimeUtcMs {
+    # Epoch-ms of the last system boot, derived from uptime. ~0ms vs ~1.4s for
+    # Get-CimInstance Win32_OperatingSystem, which matters on every shell startup.
+    [CmdletBinding()]
+    param()
+    return [int64]([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - [System.Environment]::TickCount64)
+}
+
+function ConvertTo-WtArgumentList {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Sessions,
@@ -123,4 +131,4 @@ function Write-SessionStateAtomic {
     Move-Item -LiteralPath $tmp -Destination $Path -Force
 }
 
-Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-RestorableSessions, Build-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic
+Export-ModuleMember -Function Get-CommandFirstToken, Resolve-RestoreAction, Select-RestorableSessions, ConvertTo-WtArgumentList, Read-AllSessions, Write-SessionStateAtomic, Get-BootTimeUtcMs

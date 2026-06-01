@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $script:WTSRSessionsDir)) {
 # Reap crash leftovers from THIS boot only (dead pid + touched after boot).
 # Pre-boot dead files are the restore set and are left for Restore-Workspace.ps1.
 try {
-    $bootMs = [System.DateTimeOffset]::new(((Get-CimInstance Win32_OperatingSystem).LastBootUpTime).ToUniversalTime()).ToUnixTimeMilliseconds()
+    $bootMs = Get-BootTimeUtcMs
     foreach ($s in (Read-AllSessions $script:WTSRSessionsDir)) {
         if ($null -ne (Get-Process -Id $s.pid -ErrorAction SilentlyContinue)) { continue }
         if ([int64]$s.updatedAt -ge $bootMs) {
