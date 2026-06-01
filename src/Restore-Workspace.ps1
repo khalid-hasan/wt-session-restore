@@ -63,5 +63,13 @@ $wt = (Get-Command wt.exe -ErrorAction SilentlyContinue).Source
 if (-not $wt) { throw "wt-session-restore: wt.exe (Windows Terminal) was not found on PATH." }
 
 $wtArgs = ConvertTo-WtArgumentList -Sessions $toOpen -DenyList $denyList
-Start-Process -FilePath $wt -ArgumentList $wtArgs
+
+# Launch via ProcessStartInfo.ArgumentList so .NET applies correct Windows quoting per
+# argument. Start-Process -ArgumentList <array> does NOT quote elements, which breaks tab
+# titles and folders that contain spaces (e.g. "KH Vault").
+$psi = [System.Diagnostics.ProcessStartInfo]::new($wt)
+$psi.UseShellExecute = $false
+foreach ($a in $wtArgs) { [void]$psi.ArgumentList.Add([string]$a) }
+[void][System.Diagnostics.Process]::Start($psi)
+
 Write-Host ("wt-session-restore: opened {0} of {1} saved tab(s) ({2} already open)." -f $toOpen.Count, $tabs.Count, ($tabs.Count - $toOpen.Count))

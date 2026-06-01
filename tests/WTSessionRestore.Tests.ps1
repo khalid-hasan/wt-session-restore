@@ -123,6 +123,13 @@ Describe 'ConvertTo-WtArgumentList' {
         $r = ConvertTo-WtArgumentList -Sessions $sessions -DenyList $deny
         ($r -join '|') | Should -Be 'new-tab|--title|proj1|-d|C:\dev\proj1|pwsh.exe|-NoExit|-Command|claude|;|new-tab|--title|proj2|-d|C:\dev\proj2|powershell.exe|-NoExit'
     }
+    It 'keeps a spaced title and folder as single arguments (regression: KH Vault)' {
+        $r = ConvertTo-WtArgumentList -Sessions @(
+            [pscustomobject]@{ cwd = 'C:\Users\Me\KH Vault'; command = 'claude'; shell = 'pwsh.exe' }
+        ) -DenyList @()
+        $r[2] | Should -Be 'KH Vault'              # title leaf — one element, space intact
+        $r[4] | Should -Be 'C:\Users\Me\KH Vault'  # -d value — one element, space intact
+    }
 }
 
 Describe 'Get-BootTimeUtcMs' {
